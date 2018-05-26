@@ -17,6 +17,10 @@
 #include <termios.h>
 #include <fcntl.h>
 
+/* Tamanho tabuleiro */
+#define TAMANHO_X 135
+#define TAMANHO_Y 10
+
 /* Mensagem do menu */
 #define MENU "1 - Jogar\n2 - Configuracoes\n3 - Ranking\n4 - Instrucoes\n5 - Sair\n\nEscolha uma opcao: "
 
@@ -26,6 +30,27 @@
 #define MENU_RANKING '3'
 #define MENU_INSTRUC '4'
 #define MENU_SAIR '5'
+
+/* Cores */
+#define VERMELHO "\033[22;31m"
+#define VERDE "\033[22;32m"
+#define AZUL "\033[22;34m"
+#define AMARELO "\033[01;33m"
+#define MAGENTA "\033[22;35m"
+#define CYAN "\033[22;36m"
+#define LIMITE "\033[01;36m" /* Limites do mapa, cor: Light Cyan */
+#define BRANCO "\033[01;37m" /* Padrao */ 
+
+/* Objetos: inimigos, combustível e vazio */
+
+/* TODO
+#define INIMIGO_FRACO {'X',VERMELHO,1,1}
+#define INIMIGO_MEDIO {'X',AMARELO,2,1}
+#define INIMIGO_FORTE {'X',MAGENTA,3,1}
+#define JOGADOR {'+',CYAN,1,1}
+#define COMBUSTIVEL {'F',VERDE,1,-1}
+*/
+#define VAZIO_SPRITE 32
 
 /* Mensagem Instrucoes */
 #define INSTRUC_STRING "essas sao as intrucoes poc\n\n5 - Sair\n\nEscolha uma opcao: "
@@ -73,21 +98,74 @@
     #define CLEAR "clear"
 #endif
 
-char tabuleiro[10][135];
+typedef struct {
+	/* Objeto que faz parte do tabuleiro */
+	char sprite;
+	int vidas; /* -1 significa indestrutível */
+	/* TODO: mudar nome da variavel 'matar' */
+	int matar; /* caso 1, faz o jogador perder o jogo em contato
+					caso -1, faz o jogador ganhar +40 de combustível em contato 
+					caso 0, e espaço vazio*/
+}Obj;
+
+Obj tabuleiro[TAMANHO_X][TAMANHO_Y];
+Obj jogador;
 int altura, largura;
 int probX, probF;
-int velocidade;
+int velocidade = 50;
 
 void limparTela() {
     system(CLEAR);
 }
 
+void inicializar_tabuleiro() {
+	/* inicializa tabuleiro com vazios, sendo matar, vidas = 0 */
+	int i, j;
+	for(i = 0; i < TAMANHO_X; i++) {
+		for(j = 0; j < TAMANHO_Y; j++) {
+			tabuleiro[TAMANHO_X][TAMANHO_Y].sprite = VAZIO_SPRITE;
+			tabuleiro[TAMANHO_X][TAMANHO_Y].vidas = 0;
+			tabuleiro[TAMANHO_X][TAMANHO_Y].matar = 0;
+		}
+	}
+}
+
 void print_matriz() {
-	/*TODO*/
+	/* printa limite superior */
+	int i, j;
+	limparTela();
+	
+	for(i = 0; i < TAMANHO_X; i++) {
+		printf(LIMITE);
+		printf("#");
+	}
+	
+	printf("\n");
+	printf(BRANCO);
+	for(i = 0; i < TAMANHO_Y; i++) {
+		for(j = 0; j < TAMANHO_X; j++) {
+			printf("%c", tabuleiro[TAMANHO_X][TAMANHO_Y].sprite);
+		}
+		printf("\n");
+	}
+	
+	/* printa limite inferior */
+	for(i = 0; i < TAMANHO_X; i++) {
+		printf(LIMITE);
+		printf("#");
+	}
+}
+
+int colisao() {
+	/* TODO */
+	return 0;
 }
 
 int jogar() {
-	/*TODO*/
+	inicializar_tabuleiro();
+	print_matriz();
+	getch();
+	return 0;
 }
 
 int instruc() {
@@ -118,7 +196,7 @@ int menu() {
 	
 	switch(input) {
 		case MENU_JOGAR:
-			return 1;
+			return jogar();
 		case MENU_CONFIG:
 			return 1;
 		case MENU_RANKING:
