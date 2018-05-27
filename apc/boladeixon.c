@@ -31,6 +31,17 @@
 #define MENU_INSTRUC '4'
 #define MENU_SAIR '5'
 
+/* Controles jogo */
+#define CIMA 'w'
+#define CIMA_UPPER 'W'
+#define BAIXO 's'
+#define BAIXO_UPPER 'S'
+#define DIREITA 'd'
+#define DIREITA_UPPER 'D'
+#define ESQUERDA 'a'
+#define ESQUERDA_UPPER 'A'
+#define TIRO 107
+
 /* Cores */
 #define VERMELHO "\033[22;31m"
 #define VERDE "\033[22;32m"
@@ -109,8 +120,6 @@ typedef struct {
 }Obj;
 
 Obj tabuleiro[TAMANHO_X][TAMANHO_Y];
-Obj jogador;
-int altura, largura;
 int probX, probF;
 int velocidade = 50;
 
@@ -118,15 +127,71 @@ void limparTela() {
     system(CLEAR);
 }
 
-void inicializar_tabuleiro() {
+void ini_tile_vazio(int pos_x, int pos_y) {
+	/* inicializa tile com vazio 
+	   vazio.vidas e vazio.matar sao, por padrao, 0 */
+	tabuleiro[pos_x][pos_y].sprite = VAZIO_SPRITE;
+	tabuleiro[pos_x][pos_y].vidas = 0;
+	tabuleiro[pos_x][pos_y].matar = 0;
+}
+
+void ini_tabuleiro() {
 	/* inicializa tabuleiro com vazios, sendo matar, vidas = 0 */
-	int i, j;
-	for(i = 0; i < TAMANHO_X; i++) {
-		for(j = 0; j < TAMANHO_Y; j++) {
-			tabuleiro[TAMANHO_X][TAMANHO_Y].sprite = VAZIO_SPRITE;
-			tabuleiro[TAMANHO_X][TAMANHO_Y].vidas = 0;
-			tabuleiro[TAMANHO_X][TAMANHO_Y].matar = 0;
+	int x, y;
+	for(x = 0; x < TAMANHO_X; x++) {
+		for(y = 0; y < TAMANHO_Y; y++) {
+			ini_tile_vazio(x, y);
 		}
+	}
+}
+
+void atirar(int pos_x_jgdr, int pos_y_jgdr) {
+	/* spawna tiro um tile na frente do jogador */
+	if(pos_x_jgdr+1 <= TAMANHO_X) {
+		tabuleiro[pos_x_jgdr+1][pos_y_jgdr].sprite = '>'; /* Obj tiro TODO: MACRO */
+		tabuleiro[pos_x_jgdr+1][pos_y_jgdr].vidas = 1;
+		tabuleiro[pos_x_jgdr+1][pos_y_jgdr].matar = 1;
+	}
+}
+
+void atualizar_pos(int pos_x_atual, int pos_y_atual, int nova_pos_x, int nova_pos_y ) {
+	/* coloca objeto em nova posicao e troca posição atual por vazio 
+		TODO: checkar nova posicao por colisao e caso necessario chamar funcao colisao */
+	tabuleiro[nova_pos_x][nova_pos_y].sprite = tabuleiro[pos_x_atual][pos_y_atual].sprite;
+	tabuleiro[nova_pos_x][nova_pos_y].vidas = tabuleiro[pos_x_atual][pos_y_atual].vidas;
+	tabuleiro[nova_pos_x][nova_pos_y].matar = tabuleiro[pos_x_atual][pos_y_atual].matar;
+	ini_tile_vazio(pos_x_atual, pos_y_atual);
+}
+
+void input_jogo(int input, int *pos_x_jgdr, int *pos_y_jgdr) {
+	/* Recebe o input do jogador e faz a jogada de acordo 
+		TODO: caso jogador nao de input ou aperte algum botao aleatorio */
+	switch(input) {
+		case(TIRO):
+			atirar(*pos_x_jgdr, *pos_y_jgdr);
+			
+		/* movimentacao y-axis */	
+		if((CIMA || CIMA_UPPER) && *pos_y_jgdr+1 < TAMANHO_Y) {
+			atualizar_pos(*pos_x_jgdr, *pos_y_jgdr, *pos_x_jgdr, *pos_y_jgdr+1);
+			*pos_y_jgdr+=1;
+		}
+
+		else if((BAIXO || BAIXO_UPPER) && *pos_y_jgdr-1 > 0) {
+			atualizar_pos(*pos_x_jgdr, *pos_y_jgdr, *pos_x_jgdr, *pos_y_jgdr-1);
+			*pos_y_jgdr-=1;
+		}
+			
+		/* movimentacao x-axis */	
+		else if((DIREITA || DIREITA_UPPER) && *pos_x_jgdr+1 < TAMANHO_Y) {
+			atualizar_pos(*pos_x_jgdr, *pos_y_jgdr, *pos_x_jgdr+1, *pos_y_jgdr);
+			*pos_x_jgdr+=1;
+		}
+			
+		else if((ESQUERDA || ESQUERDA_UPPER) && *pos_x_jgdr-1 >=0) {
+			atualizar_pos(*pos_x_jgdr, *pos_y_jgdr, *pos_x_jgdr-1, *pos_y_jgdr);
+			*pos_x_jgdr-=1;
+		}
+			
 	}
 }
 
@@ -162,7 +227,11 @@ int colisao() {
 }
 
 int jogar() {
-	inicializar_tabuleiro();
+	/* inicia um novo jogo */
+	/* TODO: ponteiro com posicao do jogador */
+	int jogador_pos[1][2] = {{0, TAMANHO_Y/2}};
+	
+	ini_tabuleiro();
 	print_matriz();
 	getch();
 	return 0;
