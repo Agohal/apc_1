@@ -19,7 +19,7 @@
 
 /* Tamanho tabuleiro */
 #define TAMANHO_X 135
-#define TAMANHO_Y 10
+#define TAMANHO_Y 10-1
 
 /* Mensagem do menu */
 #define MENU "1 - Jogar\n2 - Configuracoes\n3 - Ranking\n4 - Instrucoes\n5 - Sair\n\nEscolha uma opcao: "
@@ -49,10 +49,8 @@
 #define AMARELO "\033[01;33m"
 #define MAGENTA "\033[22;35m"
 #define CYAN "\033[22;36m"
-#define LIMITE "\033[01;36m" /* Limites do mapa, cor: Light Cyan */
+#define COR_LIMITE "\033[01;36m" /* Limites do mapa, cor: Light Cyan */
 #define BRANCO "\033[01;37m" /* Padrao */ 
-
-/* Objetos: inimigos, combustível e vazio */
 
 /* TODO
 #define INIMIGO_FRACO {'X',VERMELHO,1,1}
@@ -112,11 +110,11 @@
 typedef struct {
 	/* Objeto que faz parte do tabuleiro */
 	char sprite;
-	int vidas; /* -1 significa indestrutível */
-	/* TODO: mudar nome da variavel 'matar' */
-	int matar; /* caso 1, faz o jogador perder o jogo em contato
-					caso -1, faz o jogador ganhar +40 de combustível em contato 
-					caso 0, e espaço vazio*/
+	int vida; /* cada 'hit' sao -50 caso resul_contato seja 0. Pro jogador se chama combustivel. Caso 0, objeto e destruido */
+	int resul_contato; /* caso 1, faz o objeto ser destruido em contato (caso seja o jogador, o jogo acaba)
+				    caso -1, objeto nao e destruido em contato, sendo contabilizado -50 na vida
+					caso 2, faz o jogador ganhar +40 de combustível em contato e destruido em contato
+					caso 0, espaço vazio*/
 }Obj;
 
 Obj tabuleiro[TAMANHO_X][TAMANHO_Y];
@@ -127,16 +125,16 @@ void limparTela() {
     system(CLEAR);
 }
 
-void ini_tile_vazio(int pos_x, int pos_y) {
+void ini_tile_vazio(int pos_y, int pos_x) {
 	/* inicializa tile com vazio 
-	   vazio.vidas e vazio.matar sao, por padrao, 0 */
-	tabuleiro[pos_x][pos_y].sprite = VAZIO_SPRITE;
-	tabuleiro[pos_x][pos_y].vidas = 0;
-	tabuleiro[pos_x][pos_y].matar = 0;
+	   vazio.vida e vazio.resul_contato sao, por padrao, 0 */
+	tabuleiro[pos_y][pos_x].sprite = ' ';
+	tabuleiro[pos_y][pos_x].vida = 0;
+	tabuleiro[pos_y][pos_x].resul_contato = 0;
 }
 
 void ini_tabuleiro() {
-	/* inicializa tabuleiro com vazios, sendo matar, vidas = 0 */
+	/* inicializa tabuleiro com vazios, sendo resul_contato, vida = 0 */
 	int x, y;
 	for(x = 0; x < TAMANHO_X; x++) {
 		for(y = 0; y < TAMANHO_Y; y++) {
@@ -147,76 +145,79 @@ void ini_tabuleiro() {
 
 void atirar(int pos_x_jgdr, int pos_y_jgdr) {
 	/* spawna tiro um tile na frente do jogador */
-	if(pos_x_jgdr+1 <= TAMANHO_X) {
-		tabuleiro[pos_x_jgdr+1][pos_y_jgdr].sprite = '>'; /* Obj tiro TODO: MACRO */
-		tabuleiro[pos_x_jgdr+1][pos_y_jgdr].vidas = 1;
-		tabuleiro[pos_x_jgdr+1][pos_y_jgdr].matar = 1;
+	if(pos_y_jgdr+1 <= TAMANHO_X) {
+		tabuleiro[pos_y_jgdr+1][pos_x_jgdr].sprite = '>'; /* Obj tiro TODO: MACRO */
+		tabuleiro[pos_y_jgdr+1][pos_x_jgdr].vida = 50;
+		tabuleiro[pos_y_jgdr+1][pos_x_jgdr].resul_contato = 1;
 	}
 }
 
 void atualizar_pos(int pos_x_atual, int pos_y_atual, int nova_pos_x, int nova_pos_y ) {
 	/* coloca objeto em nova posicao e troca posição atual por vazio 
 		TODO: checkar nova posicao por colisao e caso necessario chamar funcao colisao */
-	tabuleiro[nova_pos_x][nova_pos_y].sprite = tabuleiro[pos_x_atual][pos_y_atual].sprite;
-	tabuleiro[nova_pos_x][nova_pos_y].vidas = tabuleiro[pos_x_atual][pos_y_atual].vidas;
-	tabuleiro[nova_pos_x][nova_pos_y].matar = tabuleiro[pos_x_atual][pos_y_atual].matar;
-	ini_tile_vazio(pos_x_atual, pos_y_atual);
+	tabuleiro[nova_pos_y][nova_pos_x].sprite = tabuleiro[pos_y_atual][pos_x_atual].sprite;
+	tabuleiro[nova_pos_y][nova_pos_x].vida = tabuleiro[pos_y_atual][pos_x_atual].vida;
+	tabuleiro[nova_pos_y][nova_pos_x].resul_contato = tabuleiro[pos_y_atual][pos_x_atual].resul_contato;
+	ini_tile_vazio(pos_y_atual, pos_x_atual);
 }
 
 void input_jogo(int input, int *pos_x_jgdr, int *pos_y_jgdr) {
 	/* Recebe o input do jogador e faz a jogada de acordo 
 		TODO: caso jogador nao de input ou aperte algum botao aleatorio */
-	switch(input) {
-		case(TIRO):
+		if(input == TIRO) {
 			atirar(*pos_x_jgdr, *pos_y_jgdr);
-			
+		}
+		
 		/* movimentacao y-axis */	
-		if((CIMA || CIMA_UPPER) && *pos_y_jgdr+1 < TAMANHO_Y) {
-			atualizar_pos(*pos_x_jgdr, *pos_y_jgdr, *pos_x_jgdr, *pos_y_jgdr+1);
-			*pos_y_jgdr+=1;
+		else if((input == CIMA || input == CIMA_UPPER)) {
+			atualizar_pos(*pos_x_jgdr, *pos_y_jgdr, *pos_x_jgdr-1, *pos_y_jgdr);
+			*pos_x_jgdr-=1;
 		}
 
-		else if((BAIXO || BAIXO_UPPER) && *pos_y_jgdr-1 > 0) {
-			atualizar_pos(*pos_x_jgdr, *pos_y_jgdr, *pos_x_jgdr, *pos_y_jgdr-1);
-			*pos_y_jgdr-=1;
-		}
-			
-		/* movimentacao x-axis */	
-		else if((DIREITA || DIREITA_UPPER) && *pos_x_jgdr+1 < TAMANHO_Y) {
+		else if((input == BAIXO || input == BAIXO_UPPER)) {
 			atualizar_pos(*pos_x_jgdr, *pos_y_jgdr, *pos_x_jgdr+1, *pos_y_jgdr);
 			*pos_x_jgdr+=1;
 		}
 			
-		else if((ESQUERDA || ESQUERDA_UPPER) && *pos_x_jgdr-1 >=0) {
-			atualizar_pos(*pos_x_jgdr, *pos_y_jgdr, *pos_x_jgdr-1, *pos_y_jgdr);
-			*pos_x_jgdr-=1;
+		/* movimentacao x-axis */	
+		else if((input == DIREITA || input == DIREITA_UPPER)) {
+			atualizar_pos(*pos_x_jgdr, *pos_y_jgdr, *pos_x_jgdr, *pos_y_jgdr+1);
+			*pos_y_jgdr+=1;
 		}
 			
-	}
+		else if((input == ESQUERDA || input == ESQUERDA_UPPER)) {
+			atualizar_pos(*pos_x_jgdr, *pos_y_jgdr, *pos_x_jgdr, *pos_y_jgdr-1);
+			*pos_y_jgdr-=1;
+		}
+		else{
+			printf("ODKSAJFIOASDFOLIUSADHF\n\nAODJKSAOIFJSAFD\n\nPAFKOADSF");
+		}
+			
 }
 
-void print_matriz() {
+void print_tabul() {
 	/* printa limite superior */
 	int i, j;
 	limparTela();
 	
 	for(i = 0; i < TAMANHO_X; i++) {
-		printf(LIMITE);
+		printf(COR_LIMITE);
 		printf("#");
 	}
 	
+	/* printa tabuleiro */
 	printf("\n");
 	printf(BRANCO);
 	for(i = 0; i < TAMANHO_Y; i++) {
 		for(j = 0; j < TAMANHO_X; j++) {
-			printf("%c", tabuleiro[TAMANHO_X][TAMANHO_Y].sprite);
+			printf("%c", tabuleiro[j][i].sprite);
 		}
 		printf("\n");
 	}
 	
 	/* printa limite inferior */
 	for(i = 0; i < TAMANHO_X; i++) {
-		printf(LIMITE);
+		printf(COR_LIMITE);
 		printf("#");
 	}
 }
@@ -226,14 +227,46 @@ int colisao() {
 	return 0;
 }
 
+int mover_tabul(int *pos_jogador){
+	/* move todos objetos do tabuleiro na ordem jogador, tiros e inimigos */
+	
+	/* movimentacao jogador */
+	
+	return 0;
+}
+
 int jogar() {
 	/* inicia um novo jogo */
-	/* TODO: ponteiro com posicao do jogador */
-	int jogador_pos[1][2] = {{0, TAMANHO_Y/2}};
-	
+	int input;
 	ini_tabuleiro();
-	print_matriz();
+	
+	/* Posicao inicial do jogador: [1][4] por padrao, vida inicial: 400 */
+	tabuleiro[1][4].sprite = '+';
+	tabuleiro[1][4].vida = 400;
+	tabuleiro[1][4].resul_contato = 1;
+	
+	/* variaveis para identificar posicao e estado do jogador */
+	int pos_jogador_x = 4;
+	int pos_jogador_y = 1;
+	Obj* jogador = &tabuleiro[1][4];
+	
+	
+	print_tabul();
+	printf("\nPressione K para comecar!\n");
 	getch();
+	while(jogador->vida > 0) {
+		usleep(75000);
+		
+		/* verifica caso botao seja pressionado e guarda a tecla */
+		if(kbhit()) {
+			input = getch();
+			input_jogo(input, &pos_jogador_x, &pos_jogador_y);
+		}
+		print_tabul();
+		
+		/* atualiza ponteiro do jogador para nova posicao */
+		jogador = &tabuleiro[pos_jogador_y][pos_jogador_x];
+	}
 	return 0;
 }
 
