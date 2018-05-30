@@ -18,8 +18,8 @@
 #include <fcntl.h>
 
 /* Tamanho tabuleiro */
-#define TAMANHO_X 135
-#define TAMANHO_Y 10-1
+#define TAMANHO_Y 135
+#define TAMANHO_X 10-1
 
 /* Mensagem do menu */
 #define MENU "1 - Jogar\n2 - Configuracoes\n3 - Ranking\n4 - Instrucoes\n5 - Sair\n\nEscolha uma opcao: "
@@ -42,6 +42,9 @@
 #define ESQUERDA_UPPER 'A'
 #define TIRO 107
 
+/* Quantidade combustivel extra por F */
+#define COMBS_EXTRA 40
+
 /* Cores */
 #define VERMELHO "\033[22;31m"
 #define VERDE "\033[22;32m"
@@ -59,7 +62,7 @@
 #define JOGADOR {'+',CYAN,1,1}
 #define COMBUSTIVEL {'F',VERDE,1,-1}
 */
-#define VAZIO_SPRITE 32
+#define VAZIO_SPRITE ' '
 
 /* Mensagem Instrucoes */
 #define INSTRUC_STRING "essas sao as intrucoes poc\n\n5 - Sair\n\nEscolha uma opcao: "
@@ -110,55 +113,152 @@
 typedef struct {
 	/* Objeto que faz parte do tabuleiro */
 	char sprite;
-	int vida; /* cada 'hit' sao -50 caso resul_contato seja 0. Pro jogador se chama combustivel. Caso 0, objeto e destruido */
-	int resul_contato; /* caso 1, faz o objeto ser destruido em contato (caso seja o jogador, o jogo acaba)
-				    caso -1, objeto nao e destruido em contato, sendo contabilizado -50 na vida
-					caso 2, faz o jogador ganhar +40 de combustível em contato e destruido em contato
-					caso 0, espaço vazio*/
-}Obj;
+	int vida; /* cada 'hit' sao -50 caso tipo seja 0. Pro jogador se chama combustivel. Caso 0, objeto e destruido */
+	int tipo; /* Positivo: destruido em contato
+						  Negativo: Nao e destruido em contato
+						  0: tile vazio 
+						  1 - Tiro, 2 - Combustivel Extra, 3 - Jogador 
+						  -1 - Inimigo Fraco, -2 - Inimigo Medio, -3 - Inimigo Forte*/
+}Obj; 
 
-Obj tabuleiro[TAMANHO_X][TAMANHO_Y];
+Obj tabuleiro[TAMANHO_Y][TAMANHO_X];
+int combustivel;
 int probX, probF;
 int velocidade = 50;
+
+/* Forward declaration */
+void atualizar_pos(Obj* obj_atual, Obj* obj_destino);
 
 void limparTela() {
     system(CLEAR);
 }
 
-void ini_tile_vazio(int pos_y, int pos_x) {
+void ini_tile_vazio(Obj* tile) {
 	/* inicializa tile com vazio 
-	   vazio.vida e vazio.resul_contato sao, por padrao, 0 */
-	tabuleiro[pos_y][pos_x].sprite = ' ';
-	tabuleiro[pos_y][pos_x].vida = 0;
-	tabuleiro[pos_y][pos_x].resul_contato = 0;
+	   vazio.vida e vazio.tipo sao, por padrao, 0 */
+	tile->sprite = VAZIO_SPRITE;
+	tile->vida = 0;
+	tile->tipo = 0;
 }
 
 void ini_tabuleiro() {
-	/* inicializa tabuleiro com vazios, sendo resul_contato, vida = 0 */
+	/* inicializa tabuleiro com tiles vazios, sendo tipo = 0, vida = 0 */
 	int x, y;
-	for(x = 0; x < TAMANHO_X; x++) {
-		for(y = 0; y < TAMANHO_Y; y++) {
-			ini_tile_vazio(x, y);
+	for(y = 0; y < TAMANHO_Y; y++) {
+		for(x = 0; x < TAMANHO_X; x++) {
+			ini_tile_vazio(&(tabuleiro[y][x]));
 		}
 	}
 }
 
 void atirar(int pos_x_jgdr, int pos_y_jgdr) {
-	/* spawna tiro um tile na frente do jogador */
-	if(pos_y_jgdr+1 <= TAMANHO_X) {
+	/* spawna tiro um tile na direita do jogador */
+	if(pos_y_jgdr+1 <= TAMANHO_Y) {
 		tabuleiro[pos_y_jgdr+1][pos_x_jgdr].sprite = '>'; /* Obj tiro TODO: MACRO */
 		tabuleiro[pos_y_jgdr+1][pos_x_jgdr].vida = 50;
-		tabuleiro[pos_y_jgdr+1][pos_x_jgdr].resul_contato = 1;
+		tabuleiro[pos_y_jgdr+1][pos_x_jgdr].tipo = 1;
 	}
 }
 
-void atualizar_pos(int pos_x_atual, int pos_y_atual, int nova_pos_x, int nova_pos_y ) {
+void spawn(int pos_x, int pos_y, int tipo) {
+	char sprite;
+	int vida;
+	if(tipo == 2) {
+		sprite = 'F';
+		vida = 50;
+	}
+	
+	else if(tipo == -1) {
+		sprite = 'X';
+		int nivel_inimigo = rand() % 4;
+		switch(nivel_inimigo) {
+			case 0:
+				vida = 50;
+			case 1:
+				vida = 50;
+			case 2:
+				tipo = -1;
+				vida = 100;
+			case 3:
+				tipo = -2;
+				vida = 150;
+		}
+	}
+}
+
+char* cor_obj(int tipo) {
+	/* retorna cor do objeto do input */
+	if(tipo == -1) {
+		return VERMELHO;
+	}
+	else if(tipo == -2) {
+		return AMARELO;
+	}
+	else if(tipo == -3) {
+		return MAGENTA;
+	}
+	else if(tipo == 2) {
+		return VERDE;
+	}
+	
+	return BRANCO;
+}
+
+void print_tabul(char* limite) {
+	/* printa limite superior */
+	int i, j;
+	limparTela();
+	
+	printf(COR_LIMITE"%s", limite);
+	
+	/* printa tabuleiro */
+	printf("\n");
+	printf(BRANCO);
+	for(i = 0; i < TAMANHO_X; i++) {
+		for(j = 0; j < TAMANHO_Y; j++) {
+			/*printf("%s%c", cor_obj(tabuleiro[i][j].tipo), tabuleiro[j][i].sprite );*/
+			printf("%c", tabuleiro[j][i].sprite);
+		}
+		printf("\n");
+	}
+	
+	/* printa limite inferior */
+	printf(COR_LIMITE"%s", limite);
+}
+
+void colisao(Obj* obj_atual, Obj* obj_destino) {
+	if(obj_atual->tipo == 2 && obj_destino->tipo == 3) {
+		ini_tile_vazio(obj_atual);
+		combustivel+=COMBS_EXTRA;
+	}
+	else if(obj_atual->tipo == 3 && obj_destino->tipo == 2) {
+		ini_tile_vazio(obj_destino);
+		combustivel+=COMBS_EXTRA;
+		/* obj atual toma lugar do obj destino */
+		atualizar_pos(obj_atual, obj_destino);
+	}
+	else {
+		obj_atual->vida -= 50;
+		obj_destino->vida -= 50;
+		if(obj_destino->vida <= 0) {
+			atualizar_pos(obj_atual, obj_destino);
+		}
+	}
+}
+
+void atualizar_pos(Obj* obj_atual, Obj* obj_destino) {
 	/* coloca objeto em nova posicao e troca posição atual por vazio 
 		TODO: checkar nova posicao por colisao e caso necessario chamar funcao colisao */
-	tabuleiro[nova_pos_y][nova_pos_x].sprite = tabuleiro[pos_y_atual][pos_x_atual].sprite;
-	tabuleiro[nova_pos_y][nova_pos_x].vida = tabuleiro[pos_y_atual][pos_x_atual].vida;
-	tabuleiro[nova_pos_y][nova_pos_x].resul_contato = tabuleiro[pos_y_atual][pos_x_atual].resul_contato;
-	ini_tile_vazio(pos_y_atual, pos_x_atual);
+	
+	if(obj_destino->tipo != 0) {
+		colisao(obj_atual, obj_destino);
+	}
+	else {
+		obj_destino->sprite = obj_atual->sprite;
+		obj_destino->vida = obj_atual->vida;
+		obj_destino->tipo = obj_atual->tipo;
+		ini_tile_vazio(obj_atual);
+	}
 }
 
 void input_jogo(int input, int *pos_x_jgdr, int *pos_y_jgdr) {
@@ -170,23 +270,23 @@ void input_jogo(int input, int *pos_x_jgdr, int *pos_y_jgdr) {
 		
 		/* movimentacao y-axis */	
 		else if((input == CIMA || input == CIMA_UPPER)) {
-			atualizar_pos(*pos_x_jgdr, *pos_y_jgdr, *pos_x_jgdr-1, *pos_y_jgdr);
+			atualizar_pos(&tabuleiro[*pos_y_jgdr][*pos_x_jgdr], &tabuleiro[*pos_x_jgdr-1][*pos_y_jgdr]);
 			*pos_x_jgdr-=1;
 		}
 
 		else if((input == BAIXO || input == BAIXO_UPPER)) {
-			atualizar_pos(*pos_x_jgdr, *pos_y_jgdr, *pos_x_jgdr+1, *pos_y_jgdr);
+			atualizar_pos(&tabuleiro[*pos_y_jgdr][*pos_x_jgdr], &tabuleiro[*pos_x_jgdr+1][*pos_y_jgdr]);
 			*pos_x_jgdr+=1;
 		}
 			
 		/* movimentacao x-axis */	
 		else if((input == DIREITA || input == DIREITA_UPPER)) {
-			atualizar_pos(*pos_x_jgdr, *pos_y_jgdr, *pos_x_jgdr, *pos_y_jgdr+1);
+			atualizar_pos(&tabuleiro[*pos_y_jgdr][*pos_x_jgdr], &tabuleiro[*pos_x_jgdr][*pos_y_jgdr+1]);
 			*pos_y_jgdr+=1;
 		}
 			
 		else if((input == ESQUERDA || input == ESQUERDA_UPPER)) {
-			atualizar_pos(*pos_x_jgdr, *pos_y_jgdr, *pos_x_jgdr, *pos_y_jgdr-1);
+			atualizar_pos(&tabuleiro[*pos_y_jgdr][*pos_x_jgdr], &tabuleiro[*pos_x_jgdr][*pos_y_jgdr-1]);
 			*pos_y_jgdr-=1;
 		}
 		else{
@@ -195,74 +295,54 @@ void input_jogo(int input, int *pos_x_jgdr, int *pos_y_jgdr) {
 			
 }
 
-void print_tabul() {
-	/* printa limite superior */
-	int i, j;
-	limparTela();
-	
-	for(i = 0; i < TAMANHO_X; i++) {
-		printf(COR_LIMITE);
-		printf("#");
-	}
-	
-	/* printa tabuleiro */
-	printf("\n");
-	printf(BRANCO);
-	for(i = 0; i < TAMANHO_Y; i++) {
-		for(j = 0; j < TAMANHO_X; j++) {
-			printf("%c", tabuleiro[j][i].sprite);
-		}
-		printf("\n");
-	}
-	
-	/* printa limite inferior */
-	for(i = 0; i < TAMANHO_X; i++) {
-		printf(COR_LIMITE);
-		printf("#");
-	}
-}
-
-int colisao() {
-	/* TODO */
-	return 0;
-}
-
-int mover_tabul(int *pos_jogador){
-	/* move todos objetos do tabuleiro na ordem jogador, tiros e inimigos */
+void mover_tabul(int input, int pos_x_jgdr, int pos_y_jgdr){
+	/* move todos objetos do tabuleiro na ordem tiros, jogador e inimigos */
 	
 	/* movimentacao jogador */
-	
-	return 0;
+	if(input != -1) {
+		input_jogo(input, &pos_x_jgdr, &pos_y_jgdr);
+	}
 }
 
 int jogar() {
 	/* inicia um novo jogo */
-	int input;
+	int input, i;
+	combustivel = 400;
 	ini_tabuleiro();
+	printf("AIOSJDOASJDOAJSD\n");
+	
+	/* inicializacao string de limite superior/inferior do tabuleiro */
+	char limite[TAMANHO_Y+1];
+	for(i = 0; i < TAMANHO_Y; i++) {
+		limite[i] = '#';
+	}
+	limite[TAMANHO_Y] = '\0';
 	
 	/* Posicao inicial do jogador: [1][4] por padrao, vida inicial: 400 */
 	tabuleiro[1][4].sprite = '+';
-	tabuleiro[1][4].vida = 400;
-	tabuleiro[1][4].resul_contato = 1;
+	tabuleiro[1][4].vida = 50;
+	tabuleiro[1][4].tipo = 1;
 	
 	/* variaveis para identificar posicao e estado do jogador */
 	int pos_jogador_x = 4;
 	int pos_jogador_y = 1;
 	Obj* jogador = &tabuleiro[1][4];
+
 	
-	
-	print_tabul();
-	printf("\nPressione K para comecar!\n");
-	getch();
-	while(jogador->vida > 0) {
-		usleep(75000);
+	print_tabul(limite);
+	/*comecar();*/
+	while(combustivel > 0) {
+		usleep(100000);
 		
 		/* verifica caso botao seja pressionado e guarda a tecla */
 		if(kbhit()) {
 			input = getch();
-			input_jogo(input, &pos_jogador_x, &pos_jogador_y);
 		}
-		print_tabul();
+		else {
+			input = -1;
+		}
+		mover_tabul(input, pos_jogador_x, pos_jogador_y);
+		print_tabul(limite);
 		
 		/* atualiza ponteiro do jogador para nova posicao */
 		jogador = &tabuleiro[pos_jogador_y][pos_jogador_x];
@@ -292,6 +372,7 @@ int menu() {
 	/* Mostra o menu principal do jogo*/
 	int input;
     limparTela();
+	
     
     printf("%s", MENU);
 	input = getch();
@@ -314,12 +395,14 @@ int menu() {
 int main() {
     int continuar = 1;
     int enter;
+	
+	srand(time(0));
     
     do {
         /* Mensagem de Boas vindas */
         limparTela();
         printf("Bem vindo ao jogo Boladeixon!\nAperte enter para entrar no menu");        
-       enter = getch(); 
+		enter = getch(); 
     }
     while(enter != 10);
     
@@ -327,6 +410,6 @@ int main() {
         continuar = menu();
     }
     
-    srand(time(0));
+
     return 0;
 }
