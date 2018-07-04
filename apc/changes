@@ -1,3 +1,4 @@
+Start bomb implementation
 - Create destruir_obj
 - Update colisao function
 - Create Bomb with multiple lives (without color) and wipe function
